@@ -12,7 +12,7 @@ const userSchema = new Schema({
         trim: true,
         index: true,
     },
-    emai:{
+    email:{
         type: String,
         required: true,
         unique: true,
