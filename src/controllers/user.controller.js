@@ -1,7 +1,7 @@
 import { asyncHandler } from "../utils/asyncHandler.js";
 import {ApiError} from "../utils/ApiError.js";
 import {User} from "../models/user.model.js";
-import {uploadOnCloudinary} from "../utils/cloudinary.js";
+import {deleteFromCloudinary, uploadOnCloudinary} from "../utils/cloudinary.js";
 import {ApiResponse} from "../utils/ApiResponse.js";
 import jwt from "jsonwebtoken";
 
@@ -263,7 +263,11 @@ const changeCurrentPassword = asyncHandler(async(req, res) =>{
 const getCurrentUser = asyncHandler(async(req, res) =>{
     return res
     .status(200)
-    .json(200, req.user, "Current user fetched successfully")
+    .json(new ApiResponse(
+        200, 
+        req.user, 
+        "Current user fetched successfully"
+    ))
 })
 
 const updateAccountDetails = asyncHandler(async(req, res) =>{
@@ -287,7 +291,7 @@ const updateAccountDetails = asyncHandler(async(req, res) =>{
     .json(new ApiResponse(200, user, "Account details updated successfully"))
 })
 
-
+//TODO: delete the previous avatar from cloudinary
 const updateUserAvatar = asyncHandler(async(req, res) =>{
     const avatarLocalPath = req.file?.path
 
@@ -301,6 +305,10 @@ const updateUserAvatar = asyncHandler(async(req, res) =>{
         throw new ApiError(400, "Error while uploading avatar image to cloudinary")
     }
 
+    //get old avatar before updating
+    const currentUser = await User.findById(req.user?._id).select("avatar")
+    const oldAvatarUrl = currentUser?.avatar
+
     const user = await User.findByIdAndUpdate(
         req.user?._id,
         {
@@ -311,9 +319,46 @@ const updateUserAvatar = asyncHandler(async(req, res) =>{
         {new: true}
     ).select("-password")
 
+    //delete the old avatar after successful update
+    try {
+        if (oldAvatarUrl && oldAvatarUrl !== avatar.url) {
+            await deleteFromCloudinary(oldAvatarUrl)
+        }
+    } catch (error) {
+        console.error("Failed to delete old avatar from Cloudinary", error);
+    }
+
     return res
     .status(200)
     .json(new ApiResponse(200, user, "Avatar updated successfully"))
+})
+
+const deleteUserAvatar = asyncHandler(async(req, res) => {
+    const user = await User.findById(req.user?._id)
+    
+    if (!user.avatar) {
+        throw new ApiError(400, "No avatar to delete")
+    }
+
+    // await oldAvatarImageToBeDeleted(user.avatar)
+    try {
+        await deleteFromCloudinary(user.avatar)
+    } catch (error) {
+        console.error("Error deleting avatar from cloudinary", error);
+    }
+    const updatedUser = await User.findByIdAndUpdate(
+        req.user?._id,
+        {
+            $set:{
+                avatar: ""
+            }
+        },
+        {new: true}
+    ).select("-password")
+
+    return res
+    .status(200)
+    .json(new ApiResponse(200, updatedUser, "Avatar deleted successfully"))
 })
 
 
@@ -354,5 +399,6 @@ export {
     getCurrentUser,
     updateAccountDetails,
     updateUserAvatar,
-    updateUserCoverImage
+    updateUserCoverImage,
+    deleteUserAvatar
 }

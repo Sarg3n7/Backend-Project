@@ -59,8 +59,36 @@ const uploadOnCloudinary = async (localFilePath) => {
         
         return null;
     }
-}
+};
+
+
+/**
+ * Delete an image from Cloudinary given a stored image URL.
+ * Returns true on success or not-found, false on error.
+ */
+const deleteFromCloudinary = async (imageUrl) => {
+    if (!imageUrl) return false;
+    try {
+        cloudinary.config({
+            cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+            api_key: process.env.CLOUDINARY_API_KEY,
+            api_secret: process.env.CLOUDINARY_API_SECRET
+        });
+
+        // example URL:
+        // https://res.cloudinary.com/<cloud>/image/upload/v1234/folder/name.jpg
+        const match = imageUrl.match(/\/upload\/(?:v\d+\/)?(.+)\.[^/.]+$/);
+        if (!match || !match[1]) return false;
+
+        const publicId = decodeURIComponent(match[1]); // folder/name
+        const result = await cloudinary.uploader.destroy(publicId, { resource_type: "image" });
+        return result && (result.result === "ok" || result.result === "not_found" || result.result === "not found");
+    } catch (err) {
+        console.error("Cloudinary delete error:", err);
+        return false;
+    }
+};
 
 
 
-export {uploadOnCloudinary};
+export {uploadOnCloudinary, deleteFromCloudinary};
